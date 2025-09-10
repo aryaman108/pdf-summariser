@@ -22,23 +22,15 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Initialize components
 pdf_processor = PDFProcessor()
 
-# Pre-load models at startup to reduce latency
+# Models will be loaded on first request to avoid startup issues
 print("Intelligent Document Agent - Initializing...")
-print("Loading models... This may take 30-60 seconds on first run...")
-try:
-    summarizer_instance = HybridSummarizer()
-    # Test the models with a small input to ensure they're ready
-    test_result = summarizer_instance.summarize("Test document for initialization", verbose=False)
-    print("Models loaded successfully!")
-    print("System ready at: http://localhost:4500")
-    print("Expected performance:")
-    print("   - First request: 15-30 seconds (model warm-up)")
-    print("   - Subsequent requests: 5-15 seconds")
-    print("   - Long documents: 20-45 seconds")
-except Exception as e:
-    print(f"Warning: Model loading failed: {e}")
-    print("System will load models on first request...")
-    summarizer_instance = None
+print("System ready at: http://localhost:4500")
+print("Models will load on first request (may take 15-30 seconds)")
+print("Expected performance:")
+print("   - First request: 15-30 seconds (model loading + processing)")
+print("   - Subsequent requests: 5-15 seconds")
+print("   - Long documents: 20-45 seconds")
+summarizer_instance = None
 
 # Ensure NLTK data is available
 try:
@@ -256,12 +248,21 @@ HTML_TEMPLATE = '''
         <div class="tabs">
             <button class="tab active" onclick="switchTab('text-tab')">Text Input</button>
             <button class="tab" onclick="switchTab('file-tab')">File Upload</button>
+            <button class="tab" onclick="switchTab('advanced-tab')">Advanced Options</button>
         </div>
 
         <div id="text-tab" class="tab-content active">
             <form method="post" onsubmit="showProcessing()">
                 <label>Enter educational text to summarize:</label><br>
                 <textarea name="text" placeholder="Paste your educational content here (notes, PDFs, research papers, etc.)">{{ text if text else '' }}</textarea><br><br>
+
+                <div class="quality-options" style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <label><strong>Quality Mode:</strong></label><br>
+                    <input type="radio" name="quality_mode" value="fast" id="fast"> <label for="fast">Fast (quick results)</label>
+                    <input type="radio" name="quality_mode" value="balanced" id="balanced" checked> <label for="balanced">Balanced (recommended)</label>
+                    <input type="radio" name="quality_mode" value="high" id="high"> <label for="high">High Quality (best accuracy)</label>
+                </div>
+
                 <input type="submit" value="Generate Summary">
             </form>
         </div>
@@ -275,9 +276,89 @@ HTML_TEMPLATE = '''
                         <label for="file">Choose file:</label>
                         <input type="file" name="file" id="file" accept=".pdf,.txt" required>
                     </div>
+
+                    <div class="quality-options" style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                        <label><strong>Quality Mode:</strong></label><br>
+                        <input type="radio" name="quality_mode" value="fast" id="file_fast"> <label for="file_fast">Fast</label>
+                        <input type="radio" name="quality_mode" value="balanced" id="file_balanced" checked> <label for="file_balanced">Balanced</label>
+                        <input type="radio" name="quality_mode" value="high" id="file_high"> <label for="file_high">High Quality</label>
+                    </div>
+
                     <input type="submit" value="Upload & Summarize">
                 </form>
                 <p><small>Maximum file size: 50MB. Supported formats: PDF, TXT</small></p>
+            </div>
+        </div>
+
+        <div id="advanced-tab" class="tab-content">
+            <div class="advanced-section">
+                <h3>Advanced Summarization Options</h3>
+
+                <div class="feature-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0;">
+                    <div class="feature-card" style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;">
+                        <h4>🎯 Quality Modes</h4>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            <li><strong>Fast:</strong> Quick results, basic accuracy</li>
+                            <li><strong>Balanced:</strong> Optimal quality-speed ratio</li>
+                            <li><strong>High:</strong> Maximum accuracy, slower processing</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card" style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;">
+                        <h4>🧠 Agentic Features</h4>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            <li>Content type detection</li>
+                            <li>Complexity analysis</li>
+                            <li>Topic extraction</li>
+                            <li>Adaptive processing</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card" style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;">
+                        <h4>📊 Quality Metrics</h4>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            <li>ROUGE, METEOR, BLEU scores</li>
+                            <li>Factual consistency</li>
+                            <li>Readability analysis</li>
+                            <li>Semantic coherence</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card" style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;">
+                        <h4>📄 Document Support</h4>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            <li>PDF text extraction</li>
+                            <li>OCR error correction</li>
+                            <li>Long document chunking</li>
+                            <li>Hierarchical summarization</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="performance-info" style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4>⚡ Performance Characteristics</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div>
+                            <strong>Short Documents (< 1K words):</strong><br>
+                            3-8 seconds processing
+                        </div>
+                        <div>
+                            <strong>Medium Documents (1K-5K words):</strong><br>
+                            8-15 seconds processing
+                        </div>
+                        <div>
+                            <strong>Long Documents (5K+ words):</strong><br>
+                            15-30 seconds processing
+                        </div>
+                    </div>
+                </div>
+
+                <div class="api-info" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4>🔌 API Access</h4>
+                    <p><strong>REST Endpoint:</strong> <code>POST /api/summarize</code></p>
+                    <p><strong>Web Interface:</strong> <code>http://localhost:4500</code></p>
+                    <p><strong>Parameters:</strong> text, quality_mode, file (for uploads)</p>
+                </div>
             </div>
         </div>
 
@@ -354,12 +435,16 @@ def index():
                 start_time = time.time()
                 print(f"Starting summarization for {len(text)} characters...")
 
+                # Get quality mode from form data
+                quality_mode = request.form.get('quality_mode', 'balanced')
+                print(f"Quality mode: {quality_mode}")
+
                 # Initialize components
                 summarizer = HybridSummarizer()
                 evaluator = SummarizationEvaluator()
 
-                # Generate summary with verbose logging (Unicode-safe)
-                summary_result = summarizer.summarize(text, verbose=True)
+                # Generate summary with quality mode and verbose logging (Unicode-safe)
+                summary_result = summarizer.summarize(text, verbose=True, quality_mode=quality_mode)
                 if isinstance(summary_result, tuple):
                     summary, agent_log = summary_result
                     print("Agent Activity Log:")
@@ -417,7 +502,8 @@ def api_summarize():
 
     try:
         summarizer = HybridSummarizer()
-        summary = summarizer.summarize(data['text'])
+        quality_mode = data.get('quality_mode', 'balanced')
+        summary = summarizer.summarize(data['text'], quality_mode=quality_mode)
 
         return jsonify({
             'summary': summary,

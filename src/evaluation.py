@@ -101,29 +101,149 @@ class SummarizationEvaluator:
         }
 
     def evaluate_summary(self, generated_summary, reference_summary, original_text, keywords):
-        """Comprehensive evaluation of a generated summary"""
+        """Enhanced comprehensive evaluation of a generated summary"""
         results = {}
 
-        # ROUGE scores
+        # Basic NLP metrics
         rouge_scores = self.compute_rouge(generated_summary, reference_summary)
         results.update(rouge_scores)
 
-        # METEOR score
         results['meteor'] = self.compute_meteor(generated_summary, reference_summary)
 
-        # BLEU scores
         bleu_scores = self.compute_bleu(generated_summary, reference_summary)
         results.update(bleu_scores)
 
-        # Factual consistency
+        # Enhanced factual consistency
         consistency_scores = self.compute_factual_consistency(generated_summary, original_text, keywords)
         results.update(consistency_scores)
+
+        # Advanced quality metrics
+        quality_scores = self.compute_quality_metrics(generated_summary, original_text)
+        results.update(quality_scores)
+
+        # Readability metrics
+        readability_scores = self.compute_readability_metrics(generated_summary)
+        results.update(readability_scores)
 
         # Summary statistics
         results['summary_length'] = len(generated_summary.split())
         results['compression_ratio'] = len(generated_summary.split()) / len(original_text.split()) if original_text.split() else 0
 
+        # Overall quality score
+        results['overall_quality_score'] = self.compute_overall_quality_score(results)
+
         return results
+
+    def compute_quality_metrics(self, summary, original_text):
+        """Compute advanced quality metrics"""
+        # Semantic coherence (simplified)
+        summary_sentences = summary.split('.')
+        coherence_score = min(1.0, len(summary_sentences) / 5)  # Prefer 3-5 sentences
+
+        # Information density
+        summary_words = set(summary.lower().split())
+        original_words = set(original_text.lower().split())
+        novel_words = summary_words - original_words
+        information_density = 1 - (len(novel_words) / len(summary_words)) if summary_words else 0
+
+        # Topic coverage
+        original_topics = self._extract_topics(original_text)
+        summary_topics = self._extract_topics(summary)
+        topic_overlap = len(set(original_topics) & set(summary_topics))
+        topic_coverage = topic_overlap / len(original_topics) if original_topics else 0
+
+        return {
+            'semantic_coherence': coherence_score,
+            'information_density': information_density,
+            'topic_coverage': topic_coverage
+        }
+
+    def compute_readability_metrics(self, text):
+        """Compute readability metrics"""
+        words = text.split()
+        sentences = text.split('.')
+
+        if not words or not sentences:
+            return {'flesch_score': 0, 'readability_level': 'unknown'}
+
+        # Simplified Flesch Reading Ease
+        avg_words_per_sentence = len(words) / len(sentences)
+        avg_syllables_per_word = sum(self._count_syllables(word) for word in words) / len(words)
+
+        flesch_score = 206.835 - (1.015 * avg_words_per_sentence) - (84.6 * avg_syllables_per_word)
+        flesch_score = max(0, min(100, flesch_score))  # Clamp to 0-100
+
+        # Determine readability level
+        if flesch_score >= 90:
+            level = '5th grade'
+        elif flesch_score >= 80:
+            level = '6th grade'
+        elif flesch_score >= 70:
+            level = '7th grade'
+        elif flesch_score >= 60:
+            level = '8th-9th grade'
+        elif flesch_score >= 50:
+            level = '10th-12th grade'
+        elif flesch_score >= 30:
+            level = 'college'
+        else:
+            level = 'college graduate'
+
+        return {
+            'flesch_score': flesch_score,
+            'readability_level': level
+        }
+
+    def compute_overall_quality_score(self, metrics):
+        """Compute overall quality score from all metrics"""
+        weights = {
+            'rouge1_f': 0.15,
+            'rouge2_f': 0.15,
+            'rougeL_f': 0.15,
+            'meteor': 0.10,
+            'factual_consistency_score': 0.20,
+            'semantic_coherence': 0.10,
+            'information_density': 0.10,
+            'topic_coverage': 0.05
+        }
+
+        score = 0
+        total_weight = 0
+
+        for metric, weight in weights.items():
+            if metric in metrics:
+                score += metrics[metric] * weight
+                total_weight += weight
+
+        return score / total_weight if total_weight > 0 else 0
+
+    def _extract_topics(self, text, top_n=10):
+        """Extract main topics from text"""
+        words = text.lower().split()
+        stop_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were'])
+        filtered_words = [word for word in words if len(word) > 3 and word not in stop_words]
+
+        from collections import Counter
+        word_freq = Counter(filtered_words)
+        return [word for word, _ in word_freq.most_common(top_n)]
+
+    def _count_syllables(self, word):
+        """Count syllables in a word (simplified)"""
+        word = word.lower()
+        count = 0
+        vowels = "aeiouy"
+
+        if word[0] in vowels:
+            count += 1
+
+        for i in range(1, len(word)):
+            if word[i] in vowels and word[i-1] not in vowels:
+                count += 1
+
+        if word.endswith("e"):
+            count -= 1
+
+        return max(1, count)
 
     def print_evaluation_report(self, results):
         """Print a formatted evaluation report"""

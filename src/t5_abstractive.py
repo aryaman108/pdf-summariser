@@ -2,7 +2,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
 class T5AbstractiveSummarizer:
-    def __init__(self, model_name='google/flan-t5-small'):
+    def __init__(self, model_name='google/flan-t5-base'):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, torch_dtype=torch.float32)
         # Ensure model is on CPU and properly loaded
@@ -11,37 +11,60 @@ class T5AbstractiveSummarizer:
 
     def constrained_decode(self, input_ids, keywords, max_length=150, min_length=30):
         """Generate summary with constrained decoding to include key terms"""
-        if not keywords:
+        try:
+            if not keywords:
+                # Fallback to standard generation
+                return self.model.generate(
+                    input_ids,
+                    max_length=int(max_length),
+                    min_length=int(min_length),
+                    length_penalty=1.5,
+                    num_beams=8,
+                    early_stopping=True,
+                    do_sample=True,
+                    temperature=0.7,
+                    top_p=0.9,
+                    repetition_penalty=1.2
+                )
+
+            # Create force_words_ids for constrained generation
+            force_words_ids = []
+            for keyword in keywords[:5]:  # Limit to top 5 keywords to avoid over-constraining
+                # Tokenize keyword and add to force words
+                keyword_tokens = self.tokenizer.encode(keyword, add_special_tokens=False)
+                if keyword_tokens:
+                    force_words_ids.append(keyword_tokens)
+
+            return self.model.generate(
+                input_ids,
+                max_length=int(max_length),
+                min_length=int(min_length),
+                length_penalty=1.5,
+                num_beams=8,
+                early_stopping=True,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                repetition_penalty=1.2,
+                force_words_ids=force_words_ids if force_words_ids else None,
+                no_repeat_ngram_size=3
+            )
+        except Exception as e:
+            print(f"Constrained decoding failed, falling back to standard generation: {e}")
             # Fallback to standard generation
             return self.model.generate(
                 input_ids,
-                max_length=max_length,
-                min_length=min_length,
-                length_penalty=2.0,
-                num_beams=4,
+                max_length=int(max_length),
+                min_length=int(min_length),
+                length_penalty=1.5,  # Reduced for more natural length
+                num_beams=8,  # Increased for better quality
                 early_stopping=True,
-                do_sample=False
+                do_sample=True,  # Enable sampling for diversity
+                temperature=0.7,  # Add controlled randomness
+                top_p=0.9,  # Nucleus sampling
+                repetition_penalty=1.2,  # Reduce repetition
+                no_repeat_ngram_size=3
             )
-
-        # Create force_words_ids for constrained generation
-        force_words_ids = []
-        for keyword in keywords[:5]:  # Limit to top 5 keywords to avoid over-constraining
-            # Tokenize keyword and add to force words
-            keyword_tokens = self.tokenizer.encode(keyword, add_special_tokens=False)
-            if keyword_tokens:
-                force_words_ids.append(keyword_tokens)
-
-        return self.model.generate(
-            input_ids,
-            max_length=max_length,
-            min_length=min_length,
-            length_penalty=2.0,
-            num_beams=6,  # Increased beams for better constrained search
-            early_stopping=True,
-            do_sample=False,
-            force_words_ids=force_words_ids if force_words_ids else None,
-            no_repeat_ngram_size=3  # Prevent repetition
-        )
 
     def summarize(self, text, keywords=None, max_length=150, min_length=30, use_constrained=False):
         """
@@ -51,18 +74,42 @@ class T5AbstractiveSummarizer:
             keywords: List of keywords to constrain generation (from extractive phase)
             use_constrained: Whether to use constrained decoding (disabled due to device issues)
         """
-        # Prepare input for FLAN-T5
+        # Enhanced context-preserving prompt engineering with better instructions
         if keywords and use_constrained:
-            # Use keywords in prompt for better grounding
-            keyword_str = ", ".join(keywords[:5])
-            input_text = f"Summarize the following text, ensuring to include key concepts like {keyword_str}: {text}"
+            # Use keywords but preserve original context with more specific instructions
+            keyword_str = ", ".join(keywords[:8])  # Include more keywords for better coverage
+            input_text = f"""Please provide a comprehensive and accurate summary of the following text. Your task is to capture all the essential information, main ideas, and key relationships while strictly maintaining the original context and meaning.
+
+IMPORTANT: Focus on these key concepts and ensure they are properly represented: {keyword_str}
+
+Summary requirements:
+- Include ALL essential information and main points from the original text
+- Preserve the logical flow and relationships between ideas
+- Maintain complete factual accuracy - do not add, remove, or alter information
+- Avoid hallucinations or introducing concepts not present in the original
+- Keep the summary coherent, well-structured, and logically organized
+- Use clear, precise language that reflects the original text's tone and style
+- Ensure the summary tells the complete story without losing important context
+
+Text to summarize: {text}"""
         else:
-            input_text = f"Summarize the following text: {text}"
+            input_text = f"""Create a comprehensive and highly accurate summary of the following text that captures ALL the essential information, main ideas, and key relationships while strictly preserving the original context and meaning.
+
+Critical requirements:
+- Include ALL important facts, concepts, and details from the original text
+- Maintain the complete logical structure and flow of ideas
+- Preserve 100% factual accuracy - never add or alter information
+- Avoid any hallucinations or fabricated content
+- Keep the summary coherent, well-organized, and contextually complete
+- Use precise language that accurately reflects the original text
+- Ensure no important information or context is lost
+
+Text to summarize: {text}"""
 
         inputs = self.tokenizer(
             input_text,
             return_tensors='pt',
-            max_length=512,
+            max_length=1024,  # Increased for better context capture
             truncation=True,
             padding=True
         )
@@ -80,22 +127,29 @@ class T5AbstractiveSummarizer:
                 print(f"Constrained decoding failed, falling back to standard generation: {e}")
                 summary_ids = self.model.generate(
                     inputs['input_ids'],
-                    max_length=max_length,
-                    min_length=min_length,
-                    length_penalty=2.0,
-                    num_beams=4,
+                    max_length=int(max_length),
+                    min_length=int(min_length),
+                    length_penalty=1.5,
+                    num_beams=8,
                     early_stopping=True,
-                    do_sample=False
+                    do_sample=True,
+                    temperature=0.7,
+                    top_p=0.9,
+                    repetition_penalty=1.2,
+                    no_repeat_ngram_size=3
                 )
         else:
             summary_ids = self.model.generate(
                 inputs['input_ids'],
-                max_length=max_length,
-                min_length=min_length,
-                length_penalty=2.0,
-                num_beams=4,
+                max_length=int(max_length),
+                min_length=int(min_length),
+                length_penalty=1.5,
+                num_beams=8,
                 early_stopping=True,
-                do_sample=False
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                repetition_penalty=1.2
             )
 
         summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
@@ -106,18 +160,40 @@ class T5AbstractiveSummarizer:
         return summary
 
     def post_process_summary(self, summary):
-        """Post-process summary for better fluency"""
+        """Enhanced post-processing for better fluency and coherence"""
         import re
 
+        if not summary:
+            return summary
+
         # Capitalize first letter
-        if summary:
-            summary = summary[0].upper() + summary[1:]
+        summary = summary[0].upper() + summary[1:]
+
+        # Fix sentence capitalization within the summary
+        sentences = re.split(r'(?<=[.!?])\s+', summary.strip())
+        processed_sentences = []
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence and len(sentence) > 1:
+                # Capitalize first letter of each sentence
+                sentence = sentence[0].upper() + sentence[1:]
+                processed_sentences.append(sentence)
+
+        summary = ' '.join(processed_sentences)
 
         # Ensure ends with proper punctuation
         if summary and not summary.endswith(('.', '!', '?')):
             summary += '.'
 
-        # Remove extra whitespace
+        # Remove extra whitespace and normalize spacing
         summary = re.sub(r'\s+', ' ', summary).strip()
+
+        # Fix common grammatical issues
+        summary = re.sub(r'\s+([.,!?;:])', r'\1', summary)  # Remove space before punctuation
+        summary = re.sub(r'([.,!?;:])\s+', r'\1 ', summary)  # Ensure space after punctuation
+
+        # Remove trailing punctuation from abbreviations that might be mistaken
+        summary = re.sub(r'\b(et al)\.', r'\1', summary, flags=re.IGNORECASE)
 
         return summary
