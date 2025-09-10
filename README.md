@@ -330,7 +330,7 @@ MIT License - see LICENSE file for details
 If you use this system in your research or applications, please cite:
 ```
 Intelligent Document Agent: Hybrid Text Summarization System
-Author: [Your Name]
+Author: Aryaman Parashar Behera && Chandra Sai Badam
 Repository: https://github.com/aryaman108/pdf-summariser
 Year: 2024
 ```
