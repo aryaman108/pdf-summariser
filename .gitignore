@@ -1,0 +1,61 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# NLTK data (will be downloaded at runtime)
+nltk_data/
+
+# Upload folder
+uploads/
+
+# Model checkpoints (if any)
+checkpoints/
+*.pt
+*.bin
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+
+# Documentation
+docs/_build/
+
+# Environment variables
+.env
+.env.local
