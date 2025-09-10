@@ -141,34 +141,329 @@ def process_uploaded_file(file):
 
         return None, f"Error processing file: {str(e)}"
 
-# Enhanced HTML template with evaluation, agentic framework info, and PDF upload
+# Enhanced HTML template with modern UI design
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Intelligent Document Agent - Hybrid Summarizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        textarea { width: 100%; height: 200px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
-        input[type="submit"] { padding: 12px 24px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        input[type="submit"]:hover { background: #0056b3; }
-        .output { margin-top: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f8f9fa; }
-        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px; }
-        .metric { background: white; padding: 10px; border-radius: 4px; border: 1px solid #eee; }
-        .metric strong { color: #007bff; }
-        .agent-info { background: #e7f3ff; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
-        .error { color: #dc3545; background: #f8d7da; padding: 10px; border-radius: 4px; margin-top: 10px; }
-        .upload-section { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
-        .file-input { margin: 10px 0; }
-        .tabs { display: flex; margin-bottom: 20px; }
-        .tab { padding: 10px 20px; background: #e9ecef; border: none; cursor: pointer; border-radius: 4px 4px 0 0; }
-        .tab.active { background: white; border-bottom: 2px solid #007bff; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        .content { padding: 30px; }
+        .agent-info {
+            background: linear-gradient(135deg, #e0f2fe 0%, #f3e8ff 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 1px solid #e0e7ff;
+        }
+        .agent-info h3 {
+            margin: 0 0 15px 0;
+            color: #1e293b;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .agent-info p {
+            margin: 5px 0;
+            color: #475569;
+            font-size: 0.95rem;
+        }
+        .system-status {
+            background: linear-gradient(135deg, #dcfce7 0%, #ecfdf5 100%);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 1px solid #bbf7d0;
+        }
+        .system-status h4 {
+            margin: 0 0 8px 0;
+            color: #166534;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .system-status p {
+            margin: 0;
+            color: #166534;
+            font-size: 0.9rem;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 6px;
+            gap: 6px;
+        }
+        .tab {
+            flex: 1;
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.3s ease;
+            font-size: 0.95rem;
+        }
+        .tab:hover { background: rgba(255,255,255,0.5); }
+        .tab.active {
+            background: white;
+            color: #1e293b;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-weight: 600;
+        }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .processing { color: #ffc107; font-style: italic; }
-        .success { color: #28a745; }
-        .file-info { background: #d4edda; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            resize: vertical;
+            transition: border-color 0.3s ease;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .quality-options {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin: 20px 0;
+        }
+        .quality-options label { margin-bottom: 12px; display: block; font-weight: 600; }
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .radio-option input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #4f46e5;
+        }
+        .btn {
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(79, 70, 229, 0.3);
+        }
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .upload-section {
+            background: #f8fafc;
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px dashed #cbd5e1;
+            text-align: center;
+        }
+        .upload-section h3 {
+            margin: 0 0 10px 0;
+            color: #1e293b;
+        }
+        .upload-section p {
+            margin: 0 0 20px 0;
+            color: #64748b;
+        }
+        .file-input {
+            margin: 20px 0;
+        }
+        .file-input input[type="file"] {
+            display: none;
+        }
+        .file-input label {
+            display: inline-block;
+            padding: 12px 20px;
+            background: #e2e8f0;
+            color: #475569;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-input label:hover { background: #cbd5e1; }
+        .output {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin-top: 30px;
+        }
+        .output h3 {
+            margin: 0 0 20px 0;
+            color: #1e293b;
+            font-size: 1.5rem;
+        }
+        .output p {
+            margin: 10px 0;
+            color: #475569;
+            line-height: 1.6;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .metric {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .metric strong {
+            color: #4f46e5;
+            font-size: 1.1rem;
+        }
+        .metric p {
+            margin: 8px 0 0 0;
+            color: #64748b;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .error {
+            background: linear-gradient(135deg, #fef2f2 0%, #fef2f2 100%);
+            color: #dc2626;
+            padding: 16px 20px;
+            border-radius: 12px;
+            border: 1px solid #fecaca;
+            margin-top: 20px;
+        }
+        .file-info {
+            background: linear-gradient(135deg, #dcfce7 0%, #ecfdf5 100%);
+            padding: 16px 20px;
+            border-radius: 12px;
+            border: 1px solid #bbf7d0;
+            margin-bottom: 20px;
+        }
+        .file-info h4 {
+            margin: 0 0 10px 0;
+            color: #166534;
+        }
+        .file-info p {
+            margin: 5px 0;
+            color: #166534;
+        }
+        .loading-indicator {
+            background: linear-gradient(135deg, #e0f2fe 0%, #f3e8ff 100%);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #bae6fd;
+            margin: 20px 0;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .feature-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover { transform: translateY(-2px); }
+        .feature-card h4 {
+            margin: 0 0 15px 0;
+            color: #1e293b;
+            font-size: 1.1rem;
+        }
+        .feature-card ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .feature-card li {
+            margin: 8px 0;
+            color: #64748b;
+        }
+        @media (max-width: 768px) {
+            .container { margin: 10px; }
+            .header { padding: 30px 20px; }
+            .header h1 { font-size: 2rem; }
+            .content { padding: 20px; }
+            .tabs { flex-direction: column; }
+            .radio-group { flex-direction: column; gap: 12px; }
+            .metrics { grid-template-columns: 1fr; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
     </style>
     <script>
         function switchTab(tabName) {
@@ -188,30 +483,38 @@ HTML_TEMPLATE = '''
         function showProcessing() {
             const submitBtn = document.querySelector('input[type="submit"]:not([disabled])');
             if (submitBtn) {
-                submitBtn.value = 'Processing...';
+                submitBtn.innerHTML = '<span class="spinner"></span> Processing...';
                 submitBtn.disabled = true;
-                submitBtn.style.background = '#ffc107';
             }
 
             // Show loading indicator
             const loadingDiv = document.createElement('div');
             loadingDiv.id = 'loading-indicator';
-            loadingDiv.innerHTML = '<p><strong>Agent is analyzing your document...</strong></p><p>This may take 10-30 seconds for the first request as models load.</p>';
-            loadingDiv.style.cssText = 'background: #e7f3ff; padding: 15px; border-radius: 4px; margin: 10px 0; border: 1px solid #b3d7ff;';
+            loadingDiv.className = 'loading-indicator';
+            loadingDiv.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+                    <div class="spinner" style="width: 24px; height: 24px; border: 3px solid #e0e7ff; border-top: 3px solid #4f46e5; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <div>
+                        <strong style="color: #1e293b;">🤖 Agent is analyzing your document...</strong>
+                        <p style="margin: 5px 0 0 0; color: #64748b; font-size: 0.9rem;">This may take 10-30 seconds for the first request as models load.</p>
+                    </div>
+                </div>
+            `;
 
-            const container = document.querySelector('.container');
+            const content = document.querySelector('.content');
             const output = document.querySelector('.output');
             if (output) {
-                container.insertBefore(loadingDiv, output);
+                content.insertBefore(loadingDiv, output);
+            } else {
+                content.appendChild(loadingDiv);
             }
         }
 
         function hideProcessing() {
             const submitBtn = document.querySelector('input[type="submit"]:disabled');
             if (submitBtn) {
-                submitBtn.value = 'Generate Summary';
+                submitBtn.innerHTML = '🚀 Generate Summary';
                 submitBtn.disabled = false;
-                submitBtn.style.background = '#007bff';
             }
 
             // Hide loading indicator
@@ -225,25 +528,39 @@ HTML_TEMPLATE = '''
         window.addEventListener('load', function() {
             hideProcessing();
         });
+
+        // Add CSS animation for spinner
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .spinner {
+                animation: spin 1s linear infinite;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </head>
 <body>
     <div class="container">
-        <h1>Intelligent Document Agent</h1>
-        <div class="agent-info">
-            <h3>Agentic Framework: Perception → Planning → Action</h3>
-            <p><strong>Perception:</strong> Analyzes document structure and preprocesses content</p>
-            <p><strong>Planning:</strong> Determines optimal chunking strategy based on document length</p>
-            <p><strong>Action:</strong> Executes hybrid extractive-abstractive summarization with constrained decoding</p>
+        <div class="header">
+            <h1>🤖 Intelligent Document Agent</h1>
+            <p>Advanced Hybrid Text Summarization Powered by RoBERTa & T5</p>
         </div>
+        <div class="content">
+            <div class="agent-info">
+                <h3>🎯 Agentic Framework: Perception → Planning → Action</h3>
+                <p><strong>🧠 Perception:</strong> Analyzes document structure and preprocesses content</p>
+                <p><strong>📋 Planning:</strong> Determines optimal chunking strategy based on document length</p>
+                <p><strong>⚡ Action:</strong> Executes hybrid extractive-abstractive summarization with constrained decoding</p>
+            </div>
 
-        <div class="system-status" style="background: #d4edda; padding: 10px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
-            <h4 style="margin: 0 0 5px 0; color: #155724;">System Status: Ready</h4>
-            <p style="margin: 0; color: #155724; font-size: 14px;">
-                Models loaded and optimized for your hardware.
-                First request may take 15-30 seconds, subsequent requests 5-15 seconds.
-            </p>
-        </div>
+            <div class="system-status">
+                <h4>✅ System Status: Ready</h4>
+                <p>Models loaded and optimized for your hardware. First request may take 15-30 seconds, subsequent requests 5-15 seconds.</p>
+            </div>
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('text-tab')">Text Input</button>
@@ -251,44 +568,70 @@ HTML_TEMPLATE = '''
             <button class="tab" onclick="switchTab('advanced-tab')">Advanced Options</button>
         </div>
 
-        <div id="text-tab" class="tab-content active">
-            <form method="post" onsubmit="showProcessing()">
-                <label>Enter educational text to summarize:</label><br>
-                <textarea name="text" placeholder="Paste your educational content here (notes, PDFs, research papers, etc.)">{{ text if text else '' }}</textarea><br><br>
-
-                <div class="quality-options" style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
-                    <label><strong>Quality Mode:</strong></label><br>
-                    <input type="radio" name="quality_mode" value="fast" id="fast"> <label for="fast">Fast (quick results)</label>
-                    <input type="radio" name="quality_mode" value="balanced" id="balanced" checked> <label for="balanced">Balanced (recommended)</label>
-                    <input type="radio" name="quality_mode" value="high" id="high"> <label for="high">High Quality (best accuracy)</label>
-                </div>
-
-                <input type="submit" value="Generate Summary">
-            </form>
-        </div>
-
-        <div id="file-tab" class="tab-content">
-            <div class="upload-section">
-                <h3>Upload Document</h3>
-                <p>Upload PDF or TXT files for automatic summarization</p>
-                <form method="post" enctype="multipart/form-data" onsubmit="showProcessing()">
-                    <div class="file-input">
-                        <label for="file">Choose file:</label>
-                        <input type="file" name="file" id="file" accept=".pdf,.txt" required>
+            <div id="text-tab" class="tab-content active">
+                <form method="post" onsubmit="showProcessing()">
+                    <div class="form-group">
+                        <label for="text-input">📝 Enter educational text to summarize:</label>
+                        <textarea name="text" id="text-input" placeholder="Paste your educational content here (notes, PDFs, research papers, etc.)">{{ text if text else '' }}</textarea>
                     </div>
 
-                    <div class="quality-options" style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
-                        <label><strong>Quality Mode:</strong></label><br>
-                        <input type="radio" name="quality_mode" value="fast" id="file_fast"> <label for="file_fast">Fast</label>
-                        <input type="radio" name="quality_mode" value="balanced" id="file_balanced" checked> <label for="file_balanced">Balanced</label>
-                        <input type="radio" name="quality_mode" value="high" id="file_high"> <label for="file_high">High Quality</label>
+                    <div class="quality-options">
+                        <label>⚙️ Quality Mode:</label>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" name="quality_mode" value="fast" id="fast">
+                                <label for="fast">⚡ Fast (quick results)</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="quality_mode" value="balanced" id="balanced" checked>
+                                <label for="balanced">⚖️ Balanced (recommended)</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" name="quality_mode" value="high" id="high">
+                                <label for="high">🎯 High Quality (best accuracy)</label>
+                            </div>
+                        </div>
                     </div>
 
-                    <input type="submit" value="Upload & Summarize">
+                    <button type="submit" class="btn">🚀 Generate Summary</button>
                 </form>
-                <p><small>Maximum file size: 50MB. Supported formats: PDF, TXT</small></p>
             </div>
-        </div>
+
+            <div id="file-tab" class="tab-content">
+                <div class="upload-section">
+                    <h3>📁 Upload Document</h3>
+                    <p>Upload PDF or TXT files for automatic summarization</p>
+                    <form method="post" enctype="multipart/form-data" onsubmit="showProcessing()">
+                        <div class="file-input">
+                            <input type="file" name="file" id="file" accept=".pdf,.txt" required>
+                            <label for="file">📎 Choose file to upload</label>
+                        </div>
+
+                        <div class="quality-options">
+                            <label>⚙️ Quality Mode:</label>
+                            <div class="radio-group">
+                                <div class="radio-option">
+                                    <input type="radio" name="quality_mode" value="fast" id="file_fast">
+                                    <label for="file_fast">⚡ Fast</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="quality_mode" value="balanced" id="file_balanced" checked>
+                                    <label for="file_balanced">⚖️ Balanced</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="quality_mode" value="high" id="file_high">
+                                    <label for="file_high">🎯 High Quality</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn">📤 Upload & Summarize</button>
+                    </form>
+                    <p style="margin: 15px 0 0 0; font-size: 0.9rem; color: #64748b;">
+                        📋 Maximum file size: 50MB. Supported formats: PDF, TXT
+                    </p>
+                </div>
+            </div>
 
         <div id="advanced-tab" class="tab-content">
             <div class="advanced-section">
@@ -362,43 +705,81 @@ HTML_TEMPLATE = '''
             </div>
         </div>
 
-        {% if file_info %}
-        <div class="file-info">
-            <h4>File Processed Successfully</h4>
-            <p><strong>Title:</strong> {{ file_info.title }}</p>
-            <p><strong>Author:</strong> {{ file_info.author }}</p>
-            <p><strong>Pages:</strong> {{ file_info.pages }}</p>
-            <p><strong>Size:</strong> {{ file_info.size }} bytes</p>
-        </div>
-        {% endif %}
+            {% if file_info %}
+            <div class="file-info">
+                <h4>✅ File Processed Successfully</h4>
+                <p><strong>📄 Title:</strong> {{ file_info.title }}</p>
+                <p><strong>👤 Author:</strong> {{ file_info.author }}</p>
+                <p><strong>📑 Pages:</strong> {{ file_info.pages }}</p>
+                <p><strong>💾 Size:</strong> {{ file_info.size }} bytes</p>
+            </div>
+            {% endif %}
 
-        {% if summary %}
-        <div class="output">
-            <h3>Summarization Results:</h3>
-            <p><strong>Original Length:</strong> {{ original_length }} characters</p>
-            <p><strong>Summary:</strong> {{ summary }}</p>
-            <p><strong>Summary Length:</strong> {{ summary_length }} characters</p>
-            <p><strong>Compression Ratio:</strong> {{ "%.2f"|format(compression_ratio) }}</p>
+            {% if summary %}
+            <div class="output">
+                <h3>📊 Summarization Results</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <strong style="color: #4f46e5;">📏 Original Length:</strong>
+                        <p style="margin: 5px 0 0 0; font-size: 1.2rem; font-weight: 600;">{{ original_length }} chars</p>
+                    </div>
+                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <strong style="color: #4f46e5;">📝 Summary Length:</strong>
+                        <p style="margin: 5px 0 0 0; font-size: 1.2rem; font-weight: 600;">{{ summary_length }} chars</p>
+                    </div>
+                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <strong style="color: #4f46e5;">🗜️ Compression Ratio:</strong>
+                        <p style="margin: 5px 0 0 0; font-size: 1.2rem; font-weight: 600;">{{ "%.2f"|format(compression_ratio) }}</p>
+                    </div>
+                </div>
 
-            {% if evaluation %}
-            <h4>Evaluation Metrics:</h4>
-            <div class="metrics">
-                <div class="metric"><strong>ROUGE-1 F1:</strong> {{ "%.3f"|format(evaluation.rouge1_f) }}</div>
-                <div class="metric"><strong>ROUGE-2 F1:</strong> {{ "%.3f"|format(evaluation.rouge2_f) }}</div>
-                <div class="metric"><strong>ROUGE-L F1:</strong> {{ "%.3f"|format(evaluation.rougeL_f) }}</div>
-                <div class="metric"><strong>METEOR:</strong> {{ "%.3f"|format(evaluation.meteor) }}</div>
-                <div class="metric"><strong>Factual Consistency:</strong> {{ "%.3f"|format(evaluation.factual_consistency_score) }}</div>
-                <div class="metric"><strong>Hallucination Rate:</strong> {{ "%.3f"|format(evaluation.hallucination_rate) }}</div>
+                <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+                    <strong style="color: #4f46e5; display: block; margin-bottom: 10px;">📋 Generated Summary:</strong>
+                    <p style="margin: 0; line-height: 1.6; color: #374151;">{{ summary }}</p>
+                </div>
+
+                {% if evaluation %}
+                <h4 style="color: #1e293b; margin-bottom: 15px;">📈 Quality Metrics</h4>
+                <div class="metrics">
+                    <div class="metric">
+                        <strong>ROUGE-1 F1</strong>
+                        <p>{{ "%.3f"|format(evaluation.rouge1_f) }}</p>
+                    </div>
+                    <div class="metric">
+                        <strong>ROUGE-2 F1</strong>
+                        <p>{{ "%.3f"|format(evaluation.rouge2_f) }}</p>
+                    </div>
+                    <div class="metric">
+                        <strong>ROUGE-L F1</strong>
+                        <p>{{ "%.3f"|format(evaluation.rougeL_f) }}</p>
+                    </div>
+                    <div class="metric">
+                        <strong>METEOR</strong>
+                        <p>{{ "%.3f"|format(evaluation.meteor) }}</p>
+                    </div>
+                    <div class="metric">
+                        <strong>📏 Factual Consistency</strong>
+                        <p>{{ "%.3f"|format(evaluation.factual_consistency_score) }}</p>
+                    </div>
+                    <div class="metric">
+                        <strong>🎭 Hallucination Rate</strong>
+                        <p>{{ "%.3f"|format(evaluation.hallucination_rate) }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="error">
+                <strong>❌ Error:</strong> {{ error }}
             </div>
             {% endif %}
         </div>
-        {% endif %}
-
-        {% if error %}
-        <div class="error">
-            <strong>Error:</strong> {{ error }}
-        </div>
-        {% endif %}
+    </div>
+</body>
+</html>
+'''
     </div>
 </body>
 </html>
