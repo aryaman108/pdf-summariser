@@ -2,12 +2,28 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
 class T5AbstractiveSummarizer:
-    def __init__(self, model_name='google/flan-t5-base'):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, torch_dtype=torch.float32)
-        # Ensure model is on CPU and properly loaded
-        self.model = self.model.to('cpu')
-        self.model.eval()
+    def __init__(self, model_name='google/flan-t5-small'):
+        try:
+            print(f"[INFO] Loading {model_name} model...")
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, dtype=torch.float32)
+            # Ensure model is on CPU and properly loaded
+            self.model = self.model.to('cpu')
+            self.model.eval()
+            print(f"[SUCCESS] {model_name} model loaded successfully")
+        except Exception as e:
+            print(f"[ERROR] Failed to load {model_name}: {e}")
+            print("[INFO] Using fallback: trying to load from local cache or alternative model")
+            # Fallback to a very small model if available
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained('t5-small')
+                self.model = AutoModelForSeq2SeqLM.from_pretrained('t5-small', dtype=torch.float32)
+                self.model = self.model.to('cpu')
+                self.model.eval()
+                print("[SUCCESS] Fallback T5 model loaded successfully")
+            except Exception as e2:
+                print(f"[ERROR] Fallback model also failed: {e2}")
+                raise e
 
     def constrained_decode(self, input_ids, keywords, max_length=150, min_length=30):
         """Generate summary with constrained decoding to include key terms"""
@@ -42,10 +58,7 @@ class T5AbstractiveSummarizer:
                 length_penalty=1.5,
                 num_beams=8,
                 early_stopping=True,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.9,
-                repetition_penalty=1.2,
+                do_sample=False,  # Disable sampling when using force_words_ids
                 force_words_ids=force_words_ids if force_words_ids else None,
                 no_repeat_ngram_size=3
             )

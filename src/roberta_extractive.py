@@ -6,31 +6,57 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 class RobertaExtractiveSummarizer:
-    def __init__(self, model_name='distilroberta-base'):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name, torch_dtype=torch.float32)
-        # Ensure model is on CPU and properly loaded
-        self.model = self.model.to('cpu')
-        self.model.eval()
+    def __init__(self, model_name='distilbert-base-uncased'):
+        try:
+            print(f"[INFO] Loading {model_name} model...")
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModel.from_pretrained(model_name, dtype=torch.float32)
+            # Ensure model is on CPU and properly loaded
+            self.model = self.model.to('cpu')
+            self.model.eval()
+            print(f"[SUCCESS] {model_name} model loaded successfully")
+        except Exception as e:
+            print(f"[ERROR] Failed to load {model_name}: {e}")
+            print("[INFO] Using fallback: trying to load from local cache or alternative model")
+            # Fallback to a very small model if available
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+                self.model = AutoModel.from_pretrained('bert-base-uncased', dtype=torch.float32)
+                self.model = self.model.to('cpu')
+                self.model.eval()
+                print("[SUCCESS] Fallback model loaded successfully")
+            except Exception as e2:
+                print(f"[ERROR] Fallback model also failed: {e2}")
+                raise e
         # NLTK punkt is handled centrally in app.py
 
     def get_sentence_embeddings(self, sentences):
-        """Get embeddings for sentences using RoBERTa"""
+        """Get embeddings for sentences using RoBERTa with batch processing"""
+        if not sentences:
+            return np.array([])
+
+        # Process in batches to improve performance
+        batch_size = min(16, len(sentences))  # Adjust batch size based on available memory
         embeddings = []
-        for sentence in sentences:
-            inputs = self.tokenizer(sentence, return_tensors='pt', truncation=True,
-                                   max_length=512, padding=True)
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-            # Use CLS token embedding for sentence representation
+
+        for i in range(0, len(sentences), batch_size):
+            batch_sentences = sentences[i:i + batch_size]
+
             try:
-                cls_embedding = outputs.last_hidden_state[:, 0, :].squeeze()
-                embeddings.append(cls_embedding.cpu().numpy())
+                inputs = self.tokenizer(batch_sentences, return_tensors='pt', truncation=True,
+                                        max_length=512, padding=True)
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+                # Use CLS token embedding for sentence representation
+                cls_embeddings = outputs.last_hidden_state[:, 0, :].cpu().numpy()
+                embeddings.extend(cls_embeddings)
             except Exception as e:
-                # Fallback: create a zero tensor with correct shape
-                print(f"Warning: Error processing sentence embedding: {e}")
-                fallback_embedding = np.zeros(768, dtype=np.float32)
-                embeddings.append(fallback_embedding)
+                # Fallback: create zero tensors for failed batch
+                print(f"Warning: Error processing sentence embeddings batch: {e}")
+                for _ in batch_sentences:
+                    fallback_embedding = np.zeros(768, dtype=np.float32)
+                    embeddings.append(fallback_embedding)
+
         return np.array(embeddings)
 
     def compute_sentence_scores(self, embeddings, sentences):

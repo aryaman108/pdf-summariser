@@ -8,17 +8,30 @@ class PDFProcessor:
         pass
 
     def extract_text_from_pdf(self, pdf_file):
-        """Extract text content from PDF file"""
+        """Extract text content from PDF file with improved error handling"""
         pdf_reader = None
         try:
             pdf_reader = PyPDF2.PdfReader(pdf_file)
 
-            # Extract text from all pages
+            # Check if PDF has pages
+            if len(pdf_reader.pages) == 0:
+                raise Exception("PDF appears to be empty or corrupted")
+
+            # Extract text from all pages with progress tracking
             text_content = []
-            for page in pdf_reader.pages:
-                text = page.extract_text()
-                if text.strip():  # Only add non-empty pages
-                    text_content.append(text)
+            total_pages = len(pdf_reader.pages)
+
+            for i, page in enumerate(pdf_reader.pages):
+                try:
+                    text = page.extract_text()
+                    if text and text.strip():  # Only add non-empty pages
+                        text_content.append(text)
+                except Exception as e:
+                    print(f"Warning: Could not extract text from page {i+1}: {e}")
+                    continue
+
+            if not text_content:
+                raise Exception("No readable text found in PDF")
 
             full_text = '\n\n'.join(text_content)
 
@@ -27,6 +40,8 @@ class PDFProcessor:
 
             return cleaned_text
 
+        except PyPDF2.errors.PdfReadError as e:
+            raise Exception(f"Invalid or corrupted PDF file: {str(e)}")
         except Exception as e:
             raise Exception(f"Error processing PDF: {str(e)}")
         finally:
