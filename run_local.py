@@ -40,7 +40,7 @@ def main():
 
     try:
         # Run the app
-        os.system("python app.py")
+        os.system(".venv\\Scripts\\python.exe app.py")
     except KeyboardInterrupt:
         print("\n[STOP] Server stopped by user")
         return 0

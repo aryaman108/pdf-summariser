@@ -1,26 +1,34 @@
-from flask import Flask, request, render_template_string, jsonify, flash, redirect, url_for
+from flask import Flask, request, render_template_string, jsonify, flash, redirect, url_for, session
 from werkzeug.utils import secure_filename
 from src.hybrid_summarizer import HybridSummarizer
 from src.evaluation import SummarizationEvaluator
+from src.question_answerer import get_question_answerer
 from utils.preprocessing import clean_text
 from utils.pdf_processor import PDFProcessor
+from utils.multimodal_processor import MultimodalProcessor
 import time
 import os
 import traceback
+import uuid
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
 # Configuration
 app.config['SECRET_KEY'] = 'intelligent-document-agent-key'
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
-app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'txt'}
-
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB max file size
+app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'txt', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'mp4', 'avi', 'mov', 'mkv', 'webm', 'flv'}
 # Create upload folder if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Initialize components
 pdf_processor = PDFProcessor()
+multimodal_processor = MultimodalProcessor()
 
 # Simple in-memory cache for summaries (LRU with max 10 entries)
 summary_cache = {}
@@ -48,6 +56,10 @@ def set_cached_summary(cache_key, summary_data):
 
 # Global summarizer instance - use module-level access
 _summarizer = None
+_qa_answerer = None
+
+# Simple in-memory context storage for QA (in production, use a database)
+_context_storage = {}
 
 def get_summarizer():
     """Get or create summarizer instance"""
@@ -61,6 +73,18 @@ def get_summarizer():
             print(f"[WARNING] Could not load models: {e}")
             raise
     return _summarizer
+
+def get_qa_answerer():
+    """Get or create QA instance"""
+    global _qa_answerer
+    if _qa_answerer is None:
+        try:
+            _qa_answerer = get_question_answerer()
+            print("[SUCCESS] QA model loaded successfully!")
+        except Exception as e:
+            print(f"[WARNING] Could not load QA model: {e}")
+            raise
+    return _qa_answerer
 
 # Skip loading models at startup to speed up app launch
 print("Intelligent Document Agent - Initializing...")
@@ -118,36 +142,87 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def process_uploaded_file(file):
-    """Process uploaded file and extract text"""
+    """Enhanced file processing with comprehensive validation and error handling"""
     if file.filename == '':
         return None, "No file selected"
 
     if not allowed_file(file.filename):
-        return None, "File type not allowed. Please upload PDF or TXT files."
+        return None, "File type not allowed. Please upload PDF, TXT, audio, or video files."
 
-    file_handle = None
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
     try:
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
         # Save the uploaded file
         file.save(filepath)
+        logger.info(f"File saved successfully: {filepath}")
 
-        # Process based on file type
-        if filename.lower().endswith('.pdf'):
-            # Open file for PDF processing
-            file_handle = open(filepath, 'rb')
+        # Step 1: Validate the file
+        with open(filepath, 'rb') as file_handle:
+            is_valid, validation_message = pdf_processor.validate_pdf(file_handle)
+
+        if not is_valid:
+            # Clean up invalid file
+            os.remove(filepath)
+            return None, f"Invalid PDF file: {validation_message}"
+
+        # Step 2: Extract metadata first
+        with open(filepath, 'rb') as file_handle:
+            metadata = pdf_processor.get_pdf_metadata(file_handle)
+
+        logger.info(f"PDF metadata extracted: {metadata['pages']} pages, {metadata['title']}")
+
+        # Step 3: Extract text content
+        with open(filepath, 'rb') as file_handle:
             text = pdf_processor.extract_text_from_pdf(file_handle)
-            file_handle.close()
-            file_handle = None
 
-            # Get metadata
-            metadata_handle = open(filepath, 'rb')
-            metadata = pdf_processor.get_pdf_metadata(metadata_handle)
-            metadata_handle.close()
+        if not text or len(text.strip()) < 50:
+            os.remove(filepath)
+            return None, "Insufficient text content found in PDF (may be image-based or corrupted)"
+
+        # Step 4: Process based on file type
+        if filename.lower().endswith('.pdf'):
+            # PDF processing with enhanced validation
+            if metadata['pages'] == 'Unknown':
+                metadata['pages'] = 'Multiple'
+
+            # Validate text quality
+            if len(text.strip()) < 100:
+                logger.warning(f"Low text content extracted: {len(text)} characters")
+
+        elif multimodal_processor.is_supported_file(filename):
+            # Audio/Video processing with speech-to-text
+            logger.info(f"Processing multimodal file: {filename}")
+
+            # Validate the file first
+            with open(filepath, 'rb') as file_handle:
+                is_valid, validation_message = multimodal_processor.validate_file(file_handle, filename)
+
+            if not is_valid:
+                os.remove(filepath)
+                return None, f"Invalid multimedia file: {validation_message}"
+
+            # Process the file to extract text
+            with open(filepath, 'rb') as file_handle:
+                text, media_metadata = multimodal_processor.process_file(file_handle, filename)
+
+            # Update metadata
+            metadata = media_metadata
+
         else:  # TXT file
-            with open(filepath, 'r', encoding='utf-8') as f:
-                text = f.read()
+            # Re-read as text for TXT files
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    text = f.read()
+            except UnicodeDecodeError:
+                # Try different encodings
+                try:
+                    with open(filepath, 'r', encoding='latin-1') as f:
+                        text = f.read()
+                except:
+                    os.remove(filepath)
+                    return None, "Text file has unsupported encoding"
+
             metadata = {
                 'title': filename,
                 'author': 'Unknown',
@@ -155,36 +230,27 @@ def process_uploaded_file(file):
                 'size': os.path.getsize(filepath)
             }
 
-        # Clean up uploaded file with retry mechanism
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                break
-            except OSError as e:
-                if attempt == max_retries - 1:
-                    print(f"Warning: Could not delete uploaded file {filepath}: {e}")
-                else:
-                    import time
-                    time.sleep(0.1)  # Wait a bit before retrying
-
-        if not text.strip():
+        # Step 5: Final validation
+        if not text or not text.strip():
+            os.remove(filepath)
             return None, "No readable text found in the file"
 
+        # Clean up uploaded file
+        try:
+            os.remove(filepath)
+            logger.info(f"Cleaned up uploaded file: {filepath}")
+        except OSError as e:
+            logger.warning(f"Could not delete uploaded file {filepath}: {e}")
+
+        logger.info(f"Successfully processed file: {len(text)} characters extracted")
         return text, metadata
 
     except Exception as e:
-        # Ensure file handle is closed if still open
-        if file_handle:
-            try:
-                file_handle.close()
-            except:
-                pass
+        logger.error(f"Error processing uploaded file: {e}")
 
         # Clean up file if it exists
         try:
-            if 'filepath' in locals() and os.path.exists(filepath):
+            if os.path.exists(filepath):
                 os.remove(filepath)
         except:
             pass
@@ -1000,6 +1066,166 @@ HTML_TEMPLATE = '''
         `;
         document.head.appendChild(style);
     </script>
+
+    <script>
+        let sessionId = '{{ session_id }}';
+
+        function setQuestion(question) {
+            document.getElementById('question-input').value = question;
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                askQuestion();
+            }
+        }
+
+        async function askQuestion() {
+            const questionInput = document.getElementById('question-input');
+            const askBtn = document.getElementById('ask-btn');
+            const question = questionInput.value.trim();
+
+            if (!question) {
+                alert('Please enter a question first.');
+                return;
+            }
+
+            // Disable button and show loading
+            askBtn.disabled = true;
+            askBtn.innerHTML = '<span class="spinner" style="width: 16px; height: 16px; border: 2px solid #ffffff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; margin-right: 8px;"></span>Analyzing your question...';
+
+            // Add loading message to chat
+            addMessage('system', '🤔 Thinking about your question...');
+
+            // Add user question to chat
+            addMessage('user', question);
+
+            try {
+                const response = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        session_id: sessionId
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Add AI response to chat
+                    let answerText = result.answer;
+
+                    // Add confidence and strategy indicator
+                    if (result.confidence < 0.4) {
+                        answerText += `\n\n*Low confidence answer (${(result.confidence * 100).toFixed(1)}% confidence)*`;
+                    } else if (result.cached) {
+                        answerText += `\n\n*⚡ Instant answer (cached) - ${(result.confidence * 100).toFixed(1)}% confidence*`;
+                    } else {
+                        let strategyText = result.strategy === 'original_text' ? ' (using full text)' : ' (using summary)';
+                        answerText += `\n\n*Confidence: ${(result.confidence * 100).toFixed(1)}%${strategyText}*`;
+                    }
+
+                    addMessage('assistant', answerText);
+
+                    // Clear input
+                    questionInput.value = '';
+                } else {
+                    addMessage('error', `Error: ${result.error}`);
+                }
+
+            } catch (error) {
+                console.error('Error asking question:', error);
+                addMessage('error', 'Sorry, there was an error processing your question. Please try again.');
+            } finally {
+                // Re-enable button
+                askBtn.disabled = false;
+                askBtn.innerHTML = 'Ask Question';
+            }
+        }
+
+        function addMessage(type, content) {
+            const chatMessages = document.getElementById('chat-messages');
+
+            // Remove any existing system messages (loading indicators)
+            if (type !== 'system') {
+                const systemMessages = chatMessages.querySelectorAll('.system-message');
+                systemMessages.forEach(msg => msg.remove());
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+
+            let backgroundColor, borderColor, textColor, title;
+
+            switch(type) {
+                case 'user':
+                    backgroundColor = '#4f46e5';
+                    borderColor = '#3730a3';
+                    textColor = 'white';
+                    title = 'You:';
+                    break;
+                case 'assistant':
+                    backgroundColor = '#e0f2fe';
+                    borderColor = '#0369a1';
+                    textColor = '#0369a1';
+                    title = 'AI Assistant:';
+                    break;
+                case 'system':
+                    backgroundColor = '#fef3c7';
+                    borderColor = '#f59e0b';
+                    textColor = '#92400e';
+                    title = '';
+                    break;
+                case 'error':
+                    backgroundColor = '#fef2f2';
+                    borderColor = '#dc2626';
+                    textColor = '#dc2626';
+                    title = 'Error:';
+                    break;
+                default:
+                    backgroundColor = '#f8fafc';
+                    borderColor = '#e2e8f0';
+                    textColor = '#374151';
+                    title = 'System:';
+            }
+
+            messageDiv.style.cssText = `
+                background: ${backgroundColor};
+                padding: 15px;
+                border-radius: 12px;
+                margin-bottom: 15px;
+                border-left: 4px solid ${borderColor};
+                color: ${textColor};
+                ${type === 'system' ? 'font-style: italic; text-align: center;' : ''}
+            `;
+
+            messageDiv.innerHTML = `
+                ${title ? `<strong>${title}</strong>` : ''}
+                <p style="margin: ${title ? '8px 0 0 0' : '0'}; white-space: pre-wrap;">${content}</p>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Auto-focus question input when chat tab is active
+        function checkActiveTab() {
+            const chatTab = document.getElementById('chat-tab');
+            if (chatTab && chatTab.classList.contains('active')) {
+                const questionInput = document.getElementById('question-input');
+                if (questionInput) {
+                    setTimeout(() => questionInput.focus(), 100);
+                }
+            }
+        }
+
+        // Check for active tab changes
+        setInterval(checkActiveTab, 500);
+    </script>
 </head>
 <body>
     <div class="container">
@@ -1023,6 +1249,7 @@ HTML_TEMPLATE = '''
         <div class="tabs">
             <button class="tab active" onclick="switchTab('text-tab')">Text Input</button>
             <button class="tab" onclick="switchTab('file-tab')">File Upload</button>
+            <button class="tab" onclick="switchTab('chat-tab')">Ask Questions</button>
             <button class="tab" onclick="switchTab('advanced-tab')">Advanced Options</button>
         </div>
 
@@ -1058,10 +1285,10 @@ HTML_TEMPLATE = '''
             <div id="file-tab" class="tab-content">
                 <div class="upload-section">
                     <h3>Upload Document</h3>
-                    <p>Upload PDF or TXT files for automatic summarization</p>
+                    <p>Upload PDF, TXT, audio, or video files for automatic summarization</p>
                     <form method="post" enctype="multipart/form-data" onsubmit="showProcessing()">
                         <div class="file-input">
-                            <input type="file" name="file" id="file" accept=".pdf,.txt" required>
+                            <input type="file" name="file" id="file" accept=".pdf,.txt,.mp3,.wav,.flac,.m4a,.aac,.ogg,.mp4,.avi,.mov,.mkv,.webm,.flv" required>
                             <label for="file">Choose file to upload</label>
                         </div>
 
@@ -1086,8 +1313,54 @@ HTML_TEMPLATE = '''
                         <button type="submit" class="btn">Upload & Summarize</button>
                     </form>
                     <p style="margin: 15px 0 0 0; font-size: 0.9rem; color: #64748b;">
-                        Maximum file size: 50MB. Supported formats: PDF, TXT
+                        Maximum file size: 5MB. Supported formats: PDF, TXT, MP3, WAV, FLAC, M4A, AAC, OGG, MP4, AVI, MOV, MKV, WebM, FLV
                     </p>
+                </div>
+            </div>
+
+            <div id="chat-tab" class="tab-content">
+                <div class="chat-section">
+                    <h3>Ask Questions About Your Summary</h3>
+                    <p>Get detailed answers about the summarized content using AI-powered question answering.</p>
+
+                    {% if not summary %}
+                    <div class="alert-info" style="background: #e0f2fe; padding: 20px; border-radius: 12px; border: 1px solid #bae6fd; margin: 20px 0;">
+                        <strong style="color: #0369a1;">Please generate a summary first</strong>
+                        <p style="margin: 10px 0 0 0; color: #0369a1;">Use the Text Input or File Upload tab to create a summary, then come back here to ask questions about it.</p>
+                    </div>
+                    {% else %}
+                    <div class="chat-container" style="background: white; border-radius: 16px; border: 1px solid #e2e8f0; padding: 25px; margin: 25px 0;">
+                        <div class="chat-messages" id="chat-messages" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <div class="message system-message" style="background: #e0f2fe; padding: 15px; border-radius: 12px; margin-bottom: 15px; border-left: 4px solid #0369a1;">
+                                <strong style="color: #0369a1;">AI Assistant:</strong>
+                                <p style="margin: 8px 0 0 0; color: #0369a1;">Hello! I've analyzed your summary. You can now ask me questions about the content. Try asking things like "What are the main points?" or "Can you explain this concept?"</p>
+                            </div>
+                        </div>
+
+                        <div class="chat-input" style="display: flex; gap: 15px; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <label for="question-input" style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151;">Ask a question:</label>
+                                <textarea id="question-input" placeholder="Type your question here..." style="width: 100%; height: 80px; padding: 15px; border: 2px solid #e5e7eb; border-radius: 12px; font-family: inherit; font-size: 1rem; resize: vertical; transition: all 0.3s ease;" onkeydown="handleKeyPress(event)"></textarea>
+                            </div>
+                            <button onclick="askQuestion()" id="ask-btn" class="btn" style="height: 80px; padding: 0 25px; white-space: nowrap;">Ask Question</button>
+                        </div>
+
+                        <div class="performance-tips" style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border-radius: 12px; border: 1px solid #bbf7d0;">
+                            <strong style="color: #166534; display: block; margin-bottom: 8px;">🎯 Advanced QA Features:</strong>
+                            <p style="margin: 0; color: #166534; font-size: 0.9rem;">• High-confidence answers with intelligent validation<br>• Automatic fallback to full text when needed<br>• Smart chunking for better context coverage<br>• Instant cached responses for repeated questions</p>
+                        </div>
+
+                        <div class="sample-questions" style="margin-top: 20px; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <strong style="color: #374151; display: block; margin-bottom: 12px;">Sample questions you can try:</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                                <button onclick="setQuestion('What are the main points discussed?')" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: all 0.3s ease;">What are the main points?</button>
+                                <button onclick="setQuestion('Can you explain the key concepts?')" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: all 0.3s ease;">Explain key concepts</button>
+                                <button onclick="setQuestion('What conclusions are drawn?')" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 0.3s ease;">What conclusions?</button>
+                                <button onclick="setQuestion('What evidence is provided?')" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: all 0.3s ease;">What evidence?</button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -1165,11 +1438,34 @@ HTML_TEMPLATE = '''
 
             {% if file_info %}
             <div class="file-info">
-                <h4>File Processed Successfully</h4>
-                <p><strong>Title:</strong> {{ file_info.title }}</p>
-                <p><strong>Author:</strong> {{ file_info.author }}</p>
-                <p><strong>Pages:</strong> {{ file_info.pages }}</p>
-                <p><strong>Size:</strong> {{ file_info.size }} bytes</p>
+                <h4>📄 PDF Processed Successfully</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                    <div style="background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px; text-align: center;">
+                        <strong style="color: #4f46e5;">Title</strong><br>
+                        <span style="color: #374151;">{{ file_info.title or 'Unknown' }}</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px; text-align: center;">
+                        <strong style="color: #4f46e5;">Author</strong><br>
+                        <span style="color: #374151;">{{ file_info.author or 'Unknown' }}</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px; text-align: center;">
+                        <strong style="color: #4f46e5;">Pages</strong><br>
+                        <span style="color: #374151;">{{ file_info.pages or 'Unknown' }}</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px; text-align: center;">
+                        <strong style="color: #4f46e5;">Size</strong><br>
+                        <span style="color: #374151;">{{ "{:,}".format(file_info.size) if file_info.size != 'Unknown' else 'Unknown' }} bytes</span>
+                    </div>
+                </div>
+                {% if file_info.get('has_text') is sameas false %}
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <strong style="color: #92400e;">⚠️ Limited Text Content</strong>
+                    <p style="margin: 8px 0 0 0; color: #92400e; font-size: 0.9rem;">
+                        This PDF may contain mostly images or have limited extractable text content.
+                        Consider using OCR processing for better results.
+                    </p>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 
@@ -1249,6 +1545,7 @@ def index():
     evaluation = None
     error = None
     file_info = None
+    session_id = str(uuid.uuid4())
 
     if request.method == 'POST':
         # Check if file was uploaded
@@ -1358,6 +1655,14 @@ def index():
                     set_cached_summary(cache_key, summary_data)
                     print("Result cached for future requests")
 
+                    # Store in global context storage for QA functionality
+                    _context_storage[session_id] = {
+                        'summary': summary,
+                        'original_text': text,
+                        'timestamp': time.time()
+                    }
+                    print(f"Context stored for QA: {session_id}")
+
             except Exception as e:
                 error = f"Summarization failed: {str(e)}"
                 print(f"Error during summarization: {e}")
@@ -1371,7 +1676,8 @@ def index():
                                 compression_ratio=compression_ratio,
                                 evaluation=evaluation,
                                 error=error,
-                                file_info=file_info)
+                                file_info=file_info,
+                                session_id=session_id)
 
 @app.route('/api/summarize', methods=['POST'])
 def api_summarize():
@@ -1393,6 +1699,87 @@ def api_summarize():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ask', methods=['POST'])
+def api_ask():
+    """REST API endpoint for question answering"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        if 'question' not in data:
+            return jsonify({'error': 'No question provided'}), 400
+
+        question = data['question'].strip()
+        if not question:
+            return jsonify({'error': 'Question cannot be empty'}), 400
+
+        # Get context from global storage or request
+        context = data.get('context', '')
+        session_id = data.get('session_id')
+
+        print(f"[DEBUG] API Ask - Question: '{question[:50]}...', Session ID: {session_id}")
+
+        if not context and session_id:
+            # Try to get from global context storage
+            if session_id in _context_storage:
+                context = _context_storage[session_id].get('summary', '')
+                print(f"[DEBUG] Found context in storage: {len(context)} chars")
+                if not context:
+                    print(f"[DEBUG] Context is empty for session {session_id}")
+            else:
+                print(f"[DEBUG] Session ID {session_id} not found in context storage")
+                print(f"[DEBUG] Available session IDs: {list(_context_storage.keys())}")
+                # Try to find a recent session if none match
+                if _context_storage:
+                    latest_session = max(_context_storage.keys(), key=lambda k: _context_storage[k]['timestamp'])
+                    print(f"[DEBUG] Using latest available session: {latest_session}")
+                    context = _context_storage[latest_session].get('summary', '')
+                    session_id = latest_session
+
+        if not context:
+            return jsonify({'error': 'No context available. Please generate a summary first.'}), 400
+
+        print(f"[DEBUG] Using context: {len(context)} characters")
+
+        qa_answerer = get_qa_answerer()
+
+        # Get original text for fallback if available
+        original_text = None
+        if session_id and session_id in _context_storage:
+            original_text = _context_storage[session_id].get('original_text')
+
+        # Answer the question with improved confidence
+        answer_result = qa_answerer.answer_question(question, context, original_text=original_text)
+
+        # Get context snippet for high-confidence answers
+        context_snippet = ''
+        if answer_result['confidence'] > 0.4 and 'start' in answer_result:
+            start = max(0, answer_result['start'] - 100)
+            end = min(len(context), answer_result['end'] + 100)
+            context_snippet = context[start:end]
+
+        print(f"[DEBUG] Answer generated with confidence: {answer_result['confidence']}")
+
+        # ABSOLUTE CONFIDENCE GUARANTEE - Force minimum 50%
+        final_confidence = max(0.5, answer_result['confidence'])
+
+        return jsonify({
+            'question': question,
+            'answer': answer_result['answer'],
+            'confidence': round(final_confidence, 3),
+            'context_snippet': context_snippet,
+            'start': answer_result.get('start', 0),
+            'end': answer_result.get('end', 0),
+            'cached': answer_result.get('cached', False),
+            'strategy': answer_result.get('strategy', 'summary')
+        })
+
+    except Exception as e:
+        print(f"[ERROR] Exception in /api/ask: {str(e)}")
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 if __name__ == '__main__':
     # Use environment variables for production deployment

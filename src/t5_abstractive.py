@@ -170,6 +170,9 @@ Text to summarize: {text}"""
         # Post-process to ensure fluency
         summary = self.post_process_summary(summary)
 
+        # Ensure proper encoding for display
+        summary = summary.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+
         return summary
 
     def post_process_summary(self, summary):

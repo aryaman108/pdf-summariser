@@ -1,0 +1,63 @@
+Collecting Flask==2.3.3
+  Using cached flask-2.3.3-py3-none-any.whl.metadata (3.6 kB)
+Collecting Werkzeug==2.3.7
+  Using cached werkzeug-2.3.7-py3-none-any.whl.metadata (4.1 kB)
+Collecting torch
+  Using cached torch-2.8.0-cp313-cp313-win_amd64.whl.metadata (30 kB)
+Collecting transformers
+  Downloading transformers-4.56.2-py3-none-any.whl.metadata (40 kB)
+Requirement already satisfied: Jinja2>=3.1.2 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from Flask==2.3.3) (3.1.6)
+Requirement already satisfied: itsdangerous>=2.1.2 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from Flask==2.3.3) (2.2.0)
+Requirement already satisfied: click>=8.1.3 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from Flask==2.3.3) (8.1.8)
+Requirement already satisfied: blinker>=1.6.2 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from Flask==2.3.3) (1.9.0)
+Requirement already satisfied: MarkupSafe>=2.1.1 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from Werkzeug==2.3.7) (3.0.2)
+Requirement already satisfied: filelock in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from torch) (3.19.1)
+Requirement already satisfied: typing-extensions>=4.10.0 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from torch) (4.14.1)
+Collecting sympy>=1.13.3 (from torch)
+  Using cached sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+Collecting networkx (from torch)
+  Using cached networkx-3.5-py3-none-any.whl.metadata (6.3 kB)
+Requirement already satisfied: fsspec in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from torch) (2025.9.0)
+Requirement already satisfied: setuptools in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from torch) (80.9.0)
+Requirement already satisfied: huggingface-hub<1.0,>=0.34.0 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from transformers) (0.34.4)
+Requirement already satisfied: numpy>=1.17 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from transformers) (2.2.6)
+Requirement already satisfied: packaging>=20.0 in c:\users\lenovo\appdata\roaming\python\python313\site-packages (from transformers) (25.0)
+Requirement already satisfied: pyyaml>=5.1 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from transformers) (6.0.2)
+Collecting regex!=2019.12.17 (from transformers)
+  Downloading regex-2025.9.18-cp313-cp313-win_amd64.whl.metadata (41 kB)
+Requirement already satisfied: requests in c:\users\lenovo\appdata\roaming\python\python313\site-packages (from transformers) (2.32.5)
+Collecting tokenizers<=0.23.0,>=0.22.0 (from transformers)
+  Downloading tokenizers-0.22.1-cp39-abi3-win_amd64.whl.metadata (6.9 kB)
+Collecting safetensors>=0.4.3 (from transformers)
+  Using cached safetensors-0.6.2-cp38-abi3-win_amd64.whl.metadata (4.1 kB)
+Requirement already satisfied: tqdm>=4.27 in c:\users\lenovo\appdata\roaming\python\python313\site-packages (from transformers) (4.67.1)
+Requirement already satisfied: colorama in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from click>=8.1.3->Flask==2.3.3) (0.4.6)
+Collecting mpmath<1.4,>=1.1.0 (from sympy>=1.13.3->torch)
+  Using cached mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Requirement already satisfied: charset_normalizer<4,>=2 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from requests->transformers) (3.4.2)
+Requirement already satisfied: idna<4,>=2.5 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from requests->transformers) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from requests->transformers) (2.5.0)
+Requirement already satisfied: certifi>=2017.4.17 in c:\users\lenovo\appdata\local\programs\python\python313\lib\site-packages (from requests->transformers) (2025.7.14)
+Using cached flask-2.3.3-py3-none-any.whl (96 kB)
+Using cached werkzeug-2.3.7-py3-none-any.whl (242 kB)
+Using cached torch-2.8.0-cp313-cp313-win_amd64.whl (241.3 MB)
+Downloading transformers-4.56.2-py3-none-any.whl (11.6 MB)
+   ---------------------------------------- 11.6/11.6 MB 735.4 kB/s  0:00:17
+Downloading tokenizers-0.22.1-cp39-abi3-win_amd64.whl (2.7 MB)
+   ---------------------------------------- 2.7/2.7 MB 903.7 kB/s  0:00:02
+Downloading regex-2025.9.18-cp313-cp313-win_amd64.whl (275 kB)
+Using cached safetensors-0.6.2-cp38-abi3-win_amd64.whl (320 kB)
+Using cached sympy-1.14.0-py3-none-any.whl (6.3 MB)
+Using cached mpmath-1.3.0-py3-none-any.whl (536 kB)
+Using cached networkx-3.5-py3-none-any.whl (2.0 MB)
+Installing collected packages: mpmath, Werkzeug, sympy, safetensors, regex, networkx, torch, Flask, tokenizers, transformers
+  Attempting uninstall: Werkzeug
+    Found existing installation: Werkzeug 3.1.3
+    Uninstalling Werkzeug-3.1.3:
+      Successfully uninstalled Werkzeug-3.1.3
+  Attempting uninstall: Flask
+    Found existing installation: Flask 3.1.2
+    Uninstalling Flask-3.1.2:
+      Successfully uninstalled Flask-3.1.2
+
+Successfully installed Flask-2.3.3 Werkzeug-2.3.7 mpmath-1.3.0 networkx-3.5 regex-2025.9.18 safetensors-0.6.2 sympy-1.14.0 tokenizers-0.22.1 torch-2.8.0 transformers-4.56.2
