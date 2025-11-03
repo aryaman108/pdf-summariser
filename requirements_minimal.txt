@@ -1,0 +1,13 @@
+# Minimal requirements to run the app
+Flask==2.3.3
+Werkzeug==2.3.7
+
+# Note: The full ML functionality requires torch and transformers
+# which need significant disk space (~2GB+).
+# 
+# To run with full functionality, you need to:
+# 1. Free up at least 3GB of disk space
+# 2. Install: pip install torch transformers nltk scikit-learn
+#
+# Current disk usage: 100% (only 392MB available)
+# Required space: ~3GB for ML models and dependencies

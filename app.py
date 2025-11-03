@@ -157,42 +157,49 @@ def process_uploaded_file(file):
         file.save(filepath)
         logger.info(f"File saved successfully: {filepath}")
 
-        # Step 1: Validate the file
-        with open(filepath, 'rb') as file_handle:
-            is_valid, validation_message = pdf_processor.validate_pdf(file_handle)
+        # Determine file type and process accordingly
+        file_extension = filename.lower().split('.')[-1]
+        
+        # Step 1: Process based on file type
+        if file_extension == 'pdf':
+            # PDF processing
+            logger.info(f"Processing PDF file: {filename}")
+            
+            # Validate the PDF file
+            with open(filepath, 'rb') as file_handle:
+                is_valid, validation_message = pdf_processor.validate_pdf(file_handle)
 
-        if not is_valid:
-            # Clean up invalid file
-            os.remove(filepath)
-            return None, f"Invalid PDF file: {validation_message}"
+            if not is_valid:
+                # Clean up invalid file
+                os.remove(filepath)
+                return None, f"Invalid PDF file: {validation_message}"
 
-        # Step 2: Extract metadata first
-        with open(filepath, 'rb') as file_handle:
-            metadata = pdf_processor.get_pdf_metadata(file_handle)
+            # Extract metadata
+            with open(filepath, 'rb') as file_handle:
+                metadata = pdf_processor.get_pdf_metadata(file_handle)
 
-        logger.info(f"PDF metadata extracted: {metadata['pages']} pages, {metadata['title']}")
+            logger.info(f"PDF metadata extracted: {metadata['pages']} pages, {metadata['title']}")
 
-        # Step 3: Extract text content
-        with open(filepath, 'rb') as file_handle:
-            text = pdf_processor.extract_text_from_pdf(file_handle)
+            # Extract text content
+            with open(filepath, 'rb') as file_handle:
+                text = pdf_processor.extract_text_from_pdf(file_handle)
 
-        if not text or len(text.strip()) < 50:
-            os.remove(filepath)
-            return None, "Insufficient text content found in PDF (may be image-based or corrupted)"
-
-        # Step 4: Process based on file type
-        if filename.lower().endswith('.pdf'):
-            # PDF processing with enhanced validation
-            if metadata['pages'] == 'Unknown':
-                metadata['pages'] = 'Multiple'
-
+            if not text or len(text.strip()) < 50:
+                os.remove(filepath)
+                return None, "Insufficient text content found in PDF (may be image-based or corrupted)"
             # Validate text quality
             if len(text.strip()) < 100:
                 logger.warning(f"Low text content extracted: {len(text)} characters")
+            
+            if metadata['pages'] == 'Unknown':
+                metadata['pages'] = 'Multiple'
 
-        elif multimodal_processor.is_supported_file(filename):
+        elif file_extension in ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'mp4', 'avi', 'mov', 'mkv', 'webm', 'flv']:
             # Audio/Video processing with speech-to-text
             logger.info(f"Processing multimodal file: {filename}")
+
+            # Note: Audio transcription is disabled, but caption extraction works
+            logger.info(f"Processing video file for caption extraction: {filename}")
 
             # Validate the file first
             with open(filepath, 'rb') as file_handle:
@@ -203,13 +210,56 @@ def process_uploaded_file(file):
                 return None, f"Invalid multimedia file: {validation_message}"
 
             # Process the file to extract text
-            with open(filepath, 'rb') as file_handle:
-                text, media_metadata = multimodal_processor.process_file(file_handle, filename)
+            try:
+                # Pass the filepath directly instead of file handle
+                text, media_metadata = multimodal_processor.process_file_from_path(filepath, filename)
+                
+                # Update metadata
+                metadata = media_metadata
+            except Exception as e:
+                os.remove(filepath)
+                logger.error(f"Error processing multimedia file: {e}")
+                
+                # Provide helpful error message
+                error_msg = str(e)
+                if "no captions" in error_msg.lower():
+                    return None, (
+                        "No captions/subtitles found in this video.\n\n"
+                        "📹 This app extracts text from videos with captions using multiple methods:\n"
+                        "• Embedded subtitle tracks in video files\n"
+                        "• Companion subtitle files (.srt, .vtt, .ass, etc.)\n"
+                        "• Video metadata descriptions\n\n"
+                        "💡 To make your video work:\n"
+                        "1. Download YouTube videos with captions: yt-dlp --write-subs [URL]\n"
+                        "2. Create a subtitle file with the same name as your video\n"
+                        "3. Use videos that already have embedded captions\n\n"
+                        "🔧 Alternative options:\n"
+                        "• Copy transcript text and use 'Text Input' tab\n"
+                        "• Upload a PDF or text file instead\n"
+                        "• Use the test script: python test_caption_extraction.py your_video.mp4\n\n"
+                        "📖 See add_captions_guide.md for detailed instructions"
+                    )
+                elif "audio transcription is disabled" in error_msg.lower():
+                    return None, (
+                        "Audio transcription is currently disabled.\n\n"
+                        "Supported options:\n"
+                        "• Upload videos with embedded captions/subtitles\n"
+                        "• Upload PDF documents\n"
+                        "• Upload text files\n"
+                        "• Use direct text input\n\n"
+                        "The app will extract text from video captions automatically."
+                    )
+                elif "no audio track" in error_msg.lower() or "has no audio" in error_msg.lower():
+                    return None, (
+                        "This video file has no audio track.\n\n"
+                        "Try uploading a video with embedded captions instead,\n"
+                        "or use a PDF/text file."
+                    )
+                else:
+                    return None, f"Failed to process multimedia file: {error_msg}"
 
-            # Update metadata
-            metadata = media_metadata
-
-        else:  # TXT file
+        elif file_extension == 'txt':  # TXT file
+            logger.info(f"Processing text file: {filename}")
             # Re-read as text for TXT files
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
@@ -229,6 +279,11 @@ def process_uploaded_file(file):
                 'pages': 1,
                 'size': os.path.getsize(filepath)
             }
+        
+        else:
+            # Unknown file type
+            os.remove(filepath)
+            return None, f"Unsupported file type: .{file_extension}. Please upload PDF, TXT, or multimedia files."
 
         # Step 5: Final validation
         if not text or not text.strip():
@@ -1784,8 +1839,8 @@ def api_ask():
 if __name__ == '__main__':
     # Use environment variables for production deployment
     import os
-    host = os.environ.get('HOST', '0.0.0.0')
-    port = int(os.environ.get('PORT', 5000))
+    host = os.environ.get('HOST', '127.0.0.1')
+    port = int(os.environ.get('PORT', 8080))  # Changed default port to 8080
     debug = os.environ.get('DEBUG', 'False').lower() == 'true'
 
     app.run(host=host, port=port, debug=debug)
