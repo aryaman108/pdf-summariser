@@ -716,6 +716,15 @@ class MultimodalProcessor:
                 # MOV: wide or mdat
                 if header.startswith(b'wide') or b'mdat' in header:
                     return True
+                # WebM: EBML header (1A 45 DF A3)
+                if header.startswith(b'\x1a\x45\xdf\xa3'):
+                    return True
+                # MKV: EBML header (same as WebM)
+                if header.startswith(b'\x1a\x45\xdf\xa3'):
+                    return True
+                # FLV: FLV header
+                if header.startswith(b'FLV'):
+                    return True
 
             return False
 
